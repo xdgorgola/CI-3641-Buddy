@@ -3,11 +3,9 @@ from math import *
 from operator import contains
 from typing import Dict, List, Tuple
 
-
 if (__name__ == "__main__"):
     print("No deberias estar aca! Shuuuu")
     quit()
-
 
 class BuddyAllocator:
     """
@@ -207,6 +205,10 @@ class BuddyAllocator:
             Una tupla (bool, BuddyBlock) cuyo primer elemento es si se encontro exitosamente 
             un bloque en la lista y el segundo elemento es el bloque encontrado (None si no se encontro)
         """
+
+        if (size <= 0):
+            print("La memoria a pedir debe ser mayor a 0.")
+            return False
 
         if (contains(self.symbols, name)):
             print("El nombre %s ya contiene espacio reservado en la memoria." %(name))
