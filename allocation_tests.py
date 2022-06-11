@@ -85,6 +85,16 @@ class BuddyAllocationTests(unittest.TestCase):
         self.assertTrue(not a.roots[0].splitted and not a.roots[0].used)
     
 
+    def test_full_blocks(self):
+        """
+        Prueba que no se pueda reservar bloques de memoria cuando todo esta full.
+        """
+
+        a : BuddyAllocator = BuddyAllocator(1)
+        self.assertTrue(a.reserve_name("a", 1))
+        self.assertFalse(a.reserve_name("b", 100))
+
+        
     def test_show(self):
         """
         Simplemente espera que el programa no tire una excepcion cuando se pide
