@@ -174,7 +174,7 @@ class BuddyAllocator:
         print("-"*30)
         print("Nombres asignados")
         for (key, item) in self.symbols.items():
-            print("Nombre %s asignado a bloque de tamano %i" %(key, 2**item.blockSize)) 
+            print("Nombre %s, usa %i y esta asignado a bloque de tamano %i" %(key, item.nameSize, 2**item.blockSize)) 
         print("-"*30)
         self.show_inorder()
 
