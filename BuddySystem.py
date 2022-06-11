@@ -7,6 +7,55 @@ if (__name__ == "__main__"):
     print("No deberias estar aca! Shuuuu")
     quit()
 
+
+def closest_higher_two_power(number : int) -> Tuple[int, int]:
+    """
+    Auxiliar. Devuelve la potencia de dos mas cercana mayor o igual a un numero.
+
+    Argumentos:
+        number -- Numero a buscar la potencia.
+
+    Returns:
+        Una tupla de la forma (int, int) cuyo primer elemento es el exponente y el segundo 
+        es 2 elevado al exponente
+    """
+
+    closestExp : int = ceil(log2(number))
+    return (closestExp, 2**closestExp)
+
+
+def closest_lower_two_power(number : int) -> Tuple[int, int]:
+    """
+    Auxiliar. Devuelve la potencia de dos mas cercana menor o igual a un numero.
+
+    Argumentos:
+        number -- Numero a buscar la potencia.
+
+    Returns:
+        Una tupla de la forma (int, int) cuyo primer elemento es el exponente y el segundo 
+        es 2 elevado al exponente
+    """
+
+    closestExp : int = ceil(log2(number))
+
+    while (2**closestExp > number):
+        closestExp -= 1
+        
+    return (closestExp, 2**closestExp)
+
+
+def decompose_to_2powers(toDec : int) -> List[int]:
+    currentSize : int = toDec
+    sizes : List[int] = []
+
+    while (currentSize > 0):
+        blockExp, blockSize = closest_lower_two_power(currentSize)
+        currentSize -= blockSize
+        sizes.append(blockExp)
+
+    return sizes
+
+
 class BuddyAllocator:
     """
     Clase que implementa un manejador de memoria basado en el buddy system.
@@ -38,16 +87,11 @@ class BuddyAllocator:
         """
 
         currentSize : int = size
-        sizes : List[int] = []
-
-        while (currentSize > 0):
-            blockExp, blockSize = self.closest_lower_two_power(currentSize)
-            currentSize -= blockSize
-            sizes.append(blockExp)
-
-            rootBlock : BuddyBlock = BuddyBlock(None, blockExp)
-            self.freeList[blockExp] = [rootBlock]
-            self.roots.append(rootBlock)
+        sizes : List[int] = decompose_to_2powers(currentSize)
+        for i in sizes:
+            block : BuddyBlock = BuddyBlock(None, i)
+            self.freeList[i] = [block]
+            self.roots.append(block)
 
         biggestValue : int = max(sizes)
         for i in range(0, biggestValue + 1):
@@ -80,10 +124,17 @@ class BuddyAllocator:
             root -- Bloque a recorrer in-order
         """
 
-        if (root.lc != None):
-            self.print_inorder(root.lc)
-            self.print_inorder(root.rc)
-        
+        printed : bool = False
+        if (root.used and root.splitted):
+            print("|name %s, name size %i, block size %i|"%(root.name, root.nameSize, 2**root.blockSize), end = " ")
+            printed = True
+
+        for c in root.childs:
+            self.print_inorder(c)
+
+        if (printed):
+            return
+            
         if (root.used):
             print("|name %s, name size %i, block size %i|"%(root.name, root.nameSize, 2**root.blockSize), end = " ")
         elif (not root.splitted):
@@ -134,12 +185,16 @@ class BuddyAllocator:
         """
 
         assert contains(self.freeList, blockSize)
-        targetList : List[BuddyBlock] = self.freeList[blockSize]
 
+        targetList : List[BuddyBlock] = self.freeList[blockSize]
         targetBlock : BuddyBlock = targetList.pop(0)
-        targetBlock.assign_name(name, nameSize)
+        blocks : List[BuddyBlock] = targetBlock.assign_name(name, nameSize)
+        if (blocks != None):
+            for b in blocks:
+                self.freeList[b.blockSize].append(b)
         
-        assert not contains(self.symbols, name), "No se puede asignar mas de un bloque por nombre."
+        assert not contains(self.symbols, name)
+
         self.symbols[name] = targetBlock
 
         return (True, targetBlock)
@@ -158,7 +213,7 @@ class BuddyAllocator:
             un bloque en la lista y el segundo elemento es el bloque encontrado (None si no se encontro)
         """
 
-        closestExp : int = self.closest_higher_two_power(size)[0]
+        closestExp : int = closest_higher_two_power(size)[0]
         if (not contains(self.freeList, closestExp)):
             print("La cantidad de memoria solicitada es mayor a los bloques mas grandes de la memoria.")
             return (False, None)
@@ -177,16 +232,20 @@ class BuddyAllocator:
             
             # Ahora debemos splittear un bloque de lista hasta conseguir el nivel que queremos.
             toSplit : BuddyBlock = targetList.pop(0)
-            freeL, freeR = toSplit.split()
+            freeL, freeR = toSplit.half_split()
 
             self.freeList[freeR.blockSize].append(freeR)
 
             while (freeL.blockSize != closestExp):
-                freeL, freeR = freeL.split()
+                freeL, freeR = freeL.half_split()
                 self.freeList[freeR.blockSize].append(freeR)
 
             assert not contains(self.symbols, name), "No se puede asignar mas de un bloque por nombre."
-            freeL.assign_name(name, size)
+            blocks : List[BuddyBlock] = freeL.assign_name(name, size)
+            if (blocks != None):
+                for b in blocks:
+                    self.freeList[b.blockSize].append(b)
+
             self.symbols[name] = freeL
             return (True, freeL)
 
@@ -241,13 +300,26 @@ class BuddyAllocator:
             return False    
         
         toFree : BuddyBlock = self.symbols.pop(name)
-        toFree.free_name()
-        self.freeList[toFree.blockSize].append(toFree)
+        divs : List[BuddyBlock] = toFree.free_name()
 
+        if (divs != None):
+            for b in divs:
+                self.freeList[b.blockSize].append(b)  
+
+            print("Se libero el nombre %s de la memoria." %(name))              
+            return True
+
+        if (toFree.splitted and toFree.can_be_merged()):
+            for c in toFree.childs:
+                self.freeList[c.blockSize].remove(c)
+            toFree.merge_childs()
+
+        self.freeList[toFree.blockSize].append(toFree)
+            
         parent : BuddyBlock = toFree.parent
         while (parent != None and parent.can_be_merged()):
-            self.freeList[parent.lc.blockSize].remove(parent.lc)
-            self.freeList[parent.rc.blockSize].remove(parent.rc)
+            for c in parent.childs:
+                self.freeList[c.blockSize].remove(c)
 
             parent.merge_childs()
 
@@ -256,42 +328,6 @@ class BuddyAllocator:
         
         print("Se libero el nombre %s de la memoria." %(name))
         return True
-                
-
-    def closest_higher_two_power(self : BuddyAllocator, number : int) -> Tuple[int, int]:
-        """
-        Auxiliar. Devuelve la potencia de dos mas cercana a un numero igual o mayor a este.
-
-        Argumentos:
-            number -- Numero a buscar la potencia.
-
-        Returns:
-            Una tupla de la forma (int, int) cuyo primer elemento es el exponente y el segundo 
-            es 2 elevado al exponente
-        """
-
-        closestExp : int = ceil(log2(number))
-        return (closestExp, 2**closestExp)
-
-
-    def closest_lower_two_power(self : BuddyAllocator, number : int) -> Tuple[int, int]:
-        """
-        Auxiliar. Devuelve la potencia de dos mas cercana a un numero igual o menor a este.
-
-        Argumentos:
-            number -- Numero a buscar la potencia.
-
-        Returns:
-            Una tupla de la forma (int, int) cuyo primer elemento es el exponente y el segundo 
-            es 2 elevado al exponente
-        """
-
-        closestExp : int = ceil(log2(number))
-
-        while (2**closestExp > number):
-            closestExp -= 1
-        
-        return (closestExp, 2**closestExp)
 
 
 
@@ -314,11 +350,10 @@ class BuddyBlock:
         self.splitted : bool = False
 
         self.name : str = None
-        self.lc : BuddyBlock = None
-        self.rc : BuddyBlock = None
-    
+        self.childs = []
 
-    def assign_name(self : BuddyBlock, name : str, nameSize : int) -> None:
+
+    def assign_name(self : BuddyBlock, name : str, nameSize : int) -> List[BuddyBlock]:
         """
         Asigna/asocia un nombre al bloque.
 
@@ -332,30 +367,59 @@ class BuddyBlock:
         self.nameSize = nameSize
         self.used = True
 
+        if (nameSize != 2**self.blockSize):
+            return self.internal_split()
+
+        return None
+
     
-    def free_name(self : BuddyBlock) -> None:
+    def is_any_child_divided_or_used(self : BuddyBlock) -> bool:
+        return any(x.used or x.splitted for x in self.childs) 
+    
+
+    def free_name(self : BuddyBlock) -> List[BuddyBlock]:
         """
         Libera el bloque del nombre al que se le asigno.
         """
 
-        assert self.used and self.lc == None and self.rc == None, "No se puede liberar un bloque no usado o con hijos."
+        #assert self.used and self.lc == None and self.rc == None, "No se puede liberar un bloque no usado o con hijos."
         self.name = None
         self.used = False
+                    
+        if (self.splitted and self.is_any_child_divided_or_used()):
+            sizes : List[int] = decompose_to_2powers(self.nameSize)
+            blocks : List[BuddyBlock] = [BuddyBlock(self, s) for s in sizes]
+            for b in reversed(blocks):
+                self.childs.insert(0, b)
+
+            return blocks
+        
+        return None
 
     
-    def split(self : BuddyBlock) -> Tuple[BuddyBlock, BuddyBlock]:
+    def half_split(self : BuddyBlock) -> Tuple[BuddyBlock, BuddyBlock]:
+        assert not self.splitted, "No se puede dividir un bloque ya dividido."
+        self.splitted = True
+        self.childs = [BuddyBlock(self, self.blockSize - 1), BuddyBlock(self, self.blockSize - 1)]
+        return (self.childs[0], self.childs[1])
+
+
+    def internal_split(self : BuddyBlock) -> List[BuddyBlock, BuddyBlock]:
         """
-        Divide el bloque en dos.
+        Divide el espacio restante del bloque en potencias de dos.
 
         Returns:
-            Una tupla que contiene los dos bloques resultantes de la division, siendo el primer elemento
-            el bloque izquierdo y el segundo el derecho
+            Lista de bloques resultantes de la division
         """
 
         assert not self.splitted, "No se puede dividir un bloque ya dividido."
-        self.lc, self.rc = BuddyBlock(self, self.blockSize - 1), BuddyBlock(self, self.blockSize - 1)
+
         self.splitted = True
-        return (self.lc, self.rc)
+        sizes : List[int] = decompose_to_2powers(2**self.blockSize - self.nameSize)
+        blocks : List[BuddyBlock] = [BuddyBlock(self, s) for s in sizes]
+        self.childs = blocks
+
+        return blocks
     
 
     def can_be_merged(self : BuddyBlock) -> bool:
@@ -366,9 +430,11 @@ class BuddyBlock:
         Returns:
             True si se cumple la condicion/False en caso contrario.
         """
+        
+        if (self.splitted):
+            return all((not x.used) and (not x.splitted) for x in self.childs)
 
-        return (self.lc != None and self.rc != None) and not (self.lc.used or self.rc.used) \
-            and not (self.lc.splitted or self.rc.splitted) and not self.used and self.splitted
+        return False
     
 
     def merge_childs(self : BuddyBlock) -> None:
@@ -376,8 +442,10 @@ class BuddyBlock:
         Mergea los hijos del bloque en caso de que haya sido dividido.
         """
 
-        assert self.can_be_merged(), "No se puede mergear un bloque padre con hijos en uso o sin hijos."
-        del self.lc
-        del self.rc
-        self.lc, self.rc = None, None
+        assert self.can_be_merged()
+
+        for c in self.childs:
+            del c
+        
+        self.childs = []
         self.splitted = False
