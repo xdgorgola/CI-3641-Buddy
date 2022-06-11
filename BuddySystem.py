@@ -248,7 +248,7 @@ class BuddyAllocator:
                 self.freeList[freeR.blockSize].append(freeR)
 
             blocks : List[BuddyBlock] = freeL.assign_name(name, size)
-            if (blocks != None):
+            if (blocks != None): # No deberia ocurrir (?)
                 for b in blocks:
                     self.freeList[b.blockSize].append(b)
 

@@ -58,7 +58,7 @@ class BuddyAllocationTests(unittest.TestCase):
         for i in range(0, 16):
             name : str = str(i)
             a.free_name(name)
-            self.assertFalse(contains(a.symbols, name))
+            self.assertFalse(a.free_name(name))
 
     
     def test_minimal_split_and_merge(self):
@@ -76,6 +76,42 @@ class BuddyAllocationTests(unittest.TestCase):
         
         self.assertTrue(not a.roots[0].splitted and not a.roots[0].used)
     
+
+    def test_internal_split_and_merge(self):
+        """
+        Prueba la division de memoria usando lo restante de los bloques para hacer mas bloques.
+        Los libera y espera que se vuelva al bloque original.
+        """
+
+        a : BuddyAllocator = BuddyAllocator(16)
+        self.assertTrue(a.reserve_name("a", 10))
+        self.assertTrue(a.reserve_name("b", 4))
+        self.assertTrue(a.reserve_name("c", 2))
+        self.assertTrue(a.free_name("a"))
+        self.assertTrue(a.reserve_name("a", 8))
+        self.assertTrue(a.reserve_name("d", 2))
+
+        self.assertTrue(a.free_name("a"))
+        self.assertTrue(a.free_name("b"))
+        self.assertTrue(a.free_name("c"))
+        self.assertTrue(a.free_name("d"))
+
+        self.assertTrue(not a.roots[0].splitted and not a.roots[0].used and not a.roots[0].splitted)  
+
+        # Prueba rapida de buscar menor potencia y dividirla.
+        a : BuddyAllocator = BuddyAllocator(20)
+        self.assertTrue(a.reserve_name("a", 7))
+        self.assertTrue(a.free_name("a"))      
+
+
+    def test_full_blocks(self):
+        """
+        Prueba que no se pueda reservar bloques de memoria cuando todo esta full.
+        """
+
+        a : BuddyAllocator = BuddyAllocator(1)
+        self.assertTrue(a.reserve_name("a", 1))
+        self.assertFalse(a.reserve_name("b", 100))
 
     def test_show(self):
         """
