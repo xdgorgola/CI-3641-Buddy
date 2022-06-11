@@ -45,6 +45,17 @@ def closest_lower_two_power(number : int) -> Tuple[int, int]:
 
 
 def decompose_to_2powers(toDec : int) -> List[int]:
+    """
+    Auxiliar. Descompone un numero en potencias de dos.
+
+    Arguments:
+        toDec -- Numero a descomponer
+
+    Returns:
+        Lista de potencias de dos resultantes de descomponer el numero.
+        Ordenada de forma descendiente.
+    """
+
     currentSize : int = toDec
     sizes : List[int] = []
 
@@ -125,8 +136,8 @@ class BuddyAllocator:
         """
 
         printed : bool = False
-        if (root.used and root.splitted):
-            print("|name %s, name size %i, block size %i|"%(root.name, root.nameSize, 2**root.blockSize), end = " ")
+        if (root.used and root.splitted): # Preservar el orden.
+            print("|name %s, name size %i|"%(root.name, root.nameSize), end = " ")
             printed = True
 
         for c in root.childs:
@@ -184,8 +195,6 @@ class BuddyAllocator:
             un bloque en la lista y el segundo elemento es el bloque encontrado (None si no se encontro)
         """
 
-        assert contains(self.freeList, blockSize)
-
         targetList : List[BuddyBlock] = self.freeList[blockSize]
         targetBlock : BuddyBlock = targetList.pop(0)
         blocks : List[BuddyBlock] = targetBlock.assign_name(name, nameSize)
@@ -193,8 +202,6 @@ class BuddyAllocator:
             for b in blocks:
                 self.freeList[b.blockSize].append(b)
         
-        assert not contains(self.symbols, name)
-
         self.symbols[name] = targetBlock
 
         return (True, targetBlock)
@@ -224,7 +231,7 @@ class BuddyAllocator:
           if (found):
               return (True, blockFound)
 
-        # Buscamos en las demas listas. NOTA: Sorted lo ordena de menor a mayor.
+        # Buscamos en las demas listas. NOTA: Sorted es ascendente.
         for key in sorted(self.freeList.keys()):
             targetList : List[BuddyBlock] = self.freeList[key]
             if (key < closestExp or len(targetList) == 0):
@@ -240,7 +247,6 @@ class BuddyAllocator:
                 freeL, freeR = freeL.half_split()
                 self.freeList[freeR.blockSize].append(freeR)
 
-            assert not contains(self.symbols, name), "No se puede asignar mas de un bloque por nombre."
             blocks : List[BuddyBlock] = freeL.assign_name(name, size)
             if (blocks != None):
                 for b in blocks:
@@ -334,7 +340,7 @@ class BuddyAllocator:
 class BuddyBlock:
     """
     Clase representativa de un bloque en el buddy system. Contiene como informacion:
-        -El bloque del cual proviene (en caso de ser producto de dividir en dos un bloque)
+        -El bloque del cual proviene (en caso de ser producto de dividir en dos o mas un bloque)
         -El tamano del bloque (representado como el exponente de una potencia de 2)
         -El tamano que reservo el nombre
         -Indicadores de si esta siendo usado o no
@@ -355,14 +361,14 @@ class BuddyBlock:
 
     def assign_name(self : BuddyBlock, name : str, nameSize : int) -> List[BuddyBlock]:
         """
-        Asigna/asocia un nombre al bloque.
+        Asigna/asocia un nombre al bloque. Si el nombre no ocupa el espacio completo,
+        el espacio sobrante se divide en potencias de dos y se usan como bloques
 
         Argumentos:
             name -- Nombre al que se le asigna el bloque
             nameSize -- El tamano que reservo el nombre
         """
 
-        #assert not (self.used or self.rc != None or self.lc != None), "No se puede asignar un nombre a un bloque ya usado o con hijos."
         self.name = name
         self.nameSize = nameSize
         self.used = True
@@ -374,15 +380,29 @@ class BuddyBlock:
 
     
     def is_any_child_divided_or_used(self : BuddyBlock) -> bool:
+        """
+        Verifica si algun hijo/subbloque del nodo esta siendo usado 
+        o esta dividido
+
+        Returns:
+            True si se cumple.
+            False en caso contrario.
+        """
         return any(x.used or x.splitted for x in self.childs) 
     
 
     def free_name(self : BuddyBlock) -> List[BuddyBlock]:
         """
         Libera el bloque del nombre al que se le asigno.
+
+        Si el bloque tiene subbloques que estan siendo usados, el espacio liberado
+        se descompone en potencias de dos y se usa como otros bloques.
+
+        Returns:
+            Una lista de bloques nuevos en caso de que el bloque se haya tenido que 
+            subdividir. None en caso contrario.    
         """
 
-        #assert self.used and self.lc == None and self.rc == None, "No se puede liberar un bloque no usado o con hijos."
         self.name = None
         self.used = False
                     
@@ -398,21 +418,27 @@ class BuddyBlock:
 
     
     def half_split(self : BuddyBlock) -> Tuple[BuddyBlock, BuddyBlock]:
-        assert not self.splitted, "No se puede dividir un bloque ya dividido."
+        """
+        Divide el bloque en dos.
+
+        Returns:
+            Una tupla con los dos bloques resultantes de la division.
+        """
+
         self.splitted = True
         self.childs = [BuddyBlock(self, self.blockSize - 1), BuddyBlock(self, self.blockSize - 1)]
+
         return (self.childs[0], self.childs[1])
 
 
     def internal_split(self : BuddyBlock) -> List[BuddyBlock, BuddyBlock]:
         """
-        Divide el espacio restante del bloque en potencias de dos.
+        Divide el espacio no usado por el nombre asignado del bloque en
+        potencias de dos y lo usa como nuevos bloques.
 
         Returns:
             Lista de bloques resultantes de la division
         """
-
-        assert not self.splitted, "No se puede dividir un bloque ya dividido."
 
         self.splitted = True
         sizes : List[int] = decompose_to_2powers(2**self.blockSize - self.nameSize)
@@ -425,24 +451,22 @@ class BuddyBlock:
     def can_be_merged(self : BuddyBlock) -> bool:
         """
         Calcula si los hijos del bloque pueden ser mergeado de vuelta
-        en el bloque padre
+        en el bloque padre.
 
         Returns:
             True si se cumple la condicion/False en caso contrario.
         """
         
-        if (self.splitted):
-            return all((not x.used) and (not x.splitted) for x in self.childs)
+        if (not self.splitted):
+            return False
+        
+        return not self.used and all((not x.used) and (not x.splitted) for x in self.childs)
 
-        return False
-    
 
     def merge_childs(self : BuddyBlock) -> None:
         """
         Mergea los hijos del bloque en caso de que haya sido dividido.
         """
-
-        assert self.can_be_merged()
 
         for c in self.childs:
             del c

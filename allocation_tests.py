@@ -70,14 +70,6 @@ class BuddyAllocationTests(unittest.TestCase):
         a : BuddyAllocator = BuddyAllocator(16) 
         for i in range(0, 16):
             self.assertTrue(a.reserve_name(str(i), 1))
-            if (i % 2 == 0):
-                # No deberia haber bloques libres en la lista 2^0, ya que los casos impares los consumen o
-                # es la primera reserva. Se hace split de un bloque mayor hasta 2^0, se consume uno y el otro
-                # pasa a la lista libre de 2^0 
-                self.assertTrue(len(a.freeList[0]) == 1)
-            else:
-                # Se consume el bloque libre que hay en la lista 2^0 en vez de hacer split.
-                self.assertTrue(len(a.freeList[0]) == 0)
         
         for i in range(0, 16):
             self.assertTrue(a.free_name(str(i)))
