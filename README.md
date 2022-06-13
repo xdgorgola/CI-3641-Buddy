@@ -1,6 +1,6 @@
 # CI-3641-Buddy
 ## Información
-Implementación de un simulador de buddy system para CI-3641 hecho en Python 3.10.5.
+Implementación de un simulador alterno de buddy system para CI-3641 hecho en Python 3.10.5.
 
 ## Uso del programa
 ### Ejecución del simulador
